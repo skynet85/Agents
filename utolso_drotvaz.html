@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notepad AI – T0 Validációs Wireframe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 
+                            50:'#f0fdfa', 100:'#ccfbf1', 200:'#99f6e4', 300:'#5eead4', 400:'#2dd4bf', 
+                            500:'#14b8a6', 600:'#0d9488', 700:'#0f766e', 800:'#115e59', 900:'#134e4a' 
+                        },
+                        surface: { 
+                            50:'#fafafa', 100:'#f4f4f5', 200:'#e4e4e7', 300:'#d4d4d8', 400:'#a1a1aa', 
+                            500:'#71717a', 600:'#52525b', 700:'#3f3f46', 800:'#27272a', 900:'#18181b', 950:'#0c0c0e' 
+                        },
+                        alert: { 
+                            50:'#fffbeb', 100:'#fef3c7', 200:'#fde68a', 300:'#fcd34d', 400:'#fbbf24', 
+                            500:'#f59e0b', 600:'#d97706' 
+                        },
+                        danger: { 
+                            50:'#fef2f2', 100:'#fee2e2', 200:'#fecaca', 300:'#fca5a5', 400:'#f87171', 
+                            500:'#ef4444', 600:'#dc2626' 
+                        }
+                    },
+                    fontFamily: { sans: ['Inter','system-ui','sans-serif'], mono: ['JetBrains Mono','Fira Code','monospace'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        /* Pixel-perfect scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #a1a1aa; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #71717a; }
+
+        /* Custom Animations */
+        @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+
+        @keyframes pulse-ring { 
+            0% { box-shadow: 0 0 0 0 rgba(245,158,11,0.3); } 
+            70% { box-shadow: 0 0 0 6px rgba(245,158,11,0); } 
+            100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } 
+        }
+        .pulse-ring-sm { animation: pulse-ring 2s infinite; }
+
+        @keyframes slideUp { from { opacity:0; transform:translateY(16px) scale(0.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+        .modal-animate { animation: slideUp 0.25s ease-out forwards; }
+
+        .progress-bar-transition { transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease; }
+        
+        /* Circuit Breaker States */
+        .circuit-open { opacity: 0.6; pointer-events: none; filter: grayscale(0.8); user-select: none; transition: all 0.3s ease; }
+        .sidebar-item.active { background: linear-gradient(90deg, rgba(20,184,166,0.08) 0%, transparent 100%); border-left: 3px solid #14b8a6; padding-left: calc(0.75rem - 3px); }
+    </style>
+</head>
+<body class="bg-surface-50 font-sans text-surface-800 overflow-hidden h-screen selection:bg-brand-200 selection:text-brand-900">
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- GLOBAL SEARCH MODAL (⌘K) -->
+<div id="global-search-modal" class="fixed inset-0 z-[90] hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="toggleGlobalSearch()"></div>
+    <div class="relative mx-auto mt-20 max-w-xl w-full bg-white rounded-2xl shadow-2xl border border-surface-200 overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-surface-100">
+            <i class="fas fa-search text-brand-500"></i>
+            <input id="global-search-input" type="text" placeholder="Keresés jegyzetekben, AI-parancsokban…" class="flex-1 bg-transparent outline-none text-surface-700 text-sm placeholder:text-surface-400">
+            <kbd class="px-2 py-0.5 text-xs font-mono bg-surface-100 rounded border border-surface-200 text-surface-500">ESC</kbd>
+        </div>
+        <div id="search-results" class="max-h-80 overflow-y-auto p-2">
+            <div class="px-3 py-2 text-xs font-semibold text-surface-400 uppercase tracking-wider">Gyakori keresések</div>
+            <!-- Search Results Items -->
+            <button onclick="toggleGlobalSearch()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-50 transition-colors group text-left">
+                <i class="fas fa-file-lines text-surface-400 group-hover:text-brand-500"></i>
+                <div><div class="text-sm font-medium text-surface-700">Q3 projektállapot-jelentés</div><div class="text-xs text-surface-400">Módosítva: ma 14:23 · Verzió v12</div></div>
+                <span class="ml-auto text-xs bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full font-medium">Jegyzet</span>
+            </button>
+            <button onclick="toggleGlobalSearch()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-50 transition-colors group text-left">
+                <i class="fas fa-wand-magic-sparkles text-surface-400 group-hover:text-amber-500"></i>
+                <div><div class="font-medium text-surface-700">AI: Összegezd a Q3 jegyzeteket</div><div class="text-xs text-surface-400">Chat parancs · RAG forrás: 5 jegyzet</div></div>
+                <span class="ml-auto text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-medium">AI Parancs</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- VERSION HISTORY MODAL -->
+<div id="version-modal" class="fixed inset-0 z-[80] hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+    <div class="relative mx-auto mt-12 max-w-lg w-full bg-white rounded-2xl shadow-2xl border border-surface-200 overflow-hidden modal-animate">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-surface-100">
+            <div><h3 class="text-base font-semibold text-surface-800">Verziótörténet</h3><p class="text-xs text-surface-400 mt-0.5">Q3 projektállapot-jelentés · v12 (aktuális)</p></div>
+            <button onclick="toggleVersionModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 text-surface-400 transition-colors"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="max-h-[60vh] overflow-y-auto p-6 space-y-4">
+            <!-- Timeline Item 1 -->
+            <div class="flex gap-3 relative">
+                <div class="flex flex-col items-center"><div class="w-3 h-3 rounded-full bg-brand-500 ring-4 ring-brand-100"></div><div class="w-px flex-1 bg-surface-200 mt-1"></div></div>
+                <div class="pb-4">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xs font-mono text-brand-600 bg-brand-50 px-2 py-0.5 rounded">v12</span><span class="text-xs text-surface-400">ma 14:23 · auto-save (backend-driven)</span></div>
+                    <p class="text-sm text-surface-600">AI által generált összefoglaló beillesztve (confidence: 0.92)</p>
+                </div>
+            </div>
+            <!-- Timeline Item 2 -->
+            <div class="flex gap-3 relative">
+                <div class="flex flex-col items-center"><div class="w-3 h-3 rounded-full bg-surface-400 ring-4 ring-surface-100"></div><div class="w-px flex-1 bg-surface-200 mt-1"></div></div>
+                <div class="pb-4">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xs font-mono text-surface-500 bg-surface-100 px-2 py-0.5 rounded">v9</span><span class="text-xs text-surface-400">tegnap 16:30 · AI draft (manuális megerősítés)</span></div>
+                    <p class="text-sm text-surface-600">AI által generált kockázati elemzés – <span class="text-amber-600 font-medium">DRAFT</span> státuszú, manuálisan ellenőrizve</p>
+                </div>
+            </div>
+             <!-- Timeline Item 3 -->
+             <div class="flex gap-3 relative">
+                <div class="flex flex-col items-center"><div class="w-3 h-3 rounded-full bg-surface-400 ring-4 ring-surface-100"></div></div>
+                <div>
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xs font-mono text-surface-500 bg-surface-100 px-2 py-0.5 rounded">v8</span><span class="text-xs text-surface-400">tegnap 09:11 · kezdeti létrehozás</span></div>
+                    <p class="text-sm text-surface-600">Dokumentum alapstruktúra, sablon alapján</p>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t border-surface-100 flex items-center justify-between bg-surface-50/50">
+            <span class="text-xs text-surface-400"><i class="fas fa-lock text-[10px] mr-1"></i>Optimistic locking: expectedVersion=12</span>
+            <button onclick="toggleVersionModal()" class="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">Bezárás</button>
+        </div>
+    </div>
+</div>
+
+<!-- SESSION TIMEOUT WARNING -->
+<div id="session-warning" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[85] hidden">
+    <div class="flex items-center gap-4 px-6 py-4 bg-surface-900 text-white rounded-xl shadow-2xl border border-surface-700 animate-fade-in max-w-md">
+        <i class="fas fa-clock text-amber-400 text-lg"></i>
+        <div><p class="text-sm font-semibold">Munkamenet lejárata közeledik</p><p class="text-xs text-surface-400 mt-0.5">Automatikus kijelentkezés 2 perc múlva · Az auto-save már elmentette a változásokat.</p></div>
+        <button onclick="extendSession()" class="px-4 py-2 text-xs font-bold bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors shrink-0">Hosszabbítás</button>
+    </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="flex h-screen">
+
+    <!-- SIDEBAR (280px) -->
+    <aside id="sidebar" class="w-[280px] bg-white border-r border-surface-200 flex flex-col shrink-0 transition-all duration-300 z-10 shadow-lg">
+        <!-- Header -->
+        <div class="px-4 py-4 border-b border-surface-100">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center shadow-sm">
+                        <i class="fas fa-note-sticky text-white text-sm"></i>
+                    </div>
+                    <span class="font-bold text-surface-800 tracking-tight">Notepad<span class="text-brand-500">AI</span></span>
+                </div>
+                <button onclick="toggleGlobalSearch()" class="flex items-center gap-1.5 px-2 py-1.5 bg-surface-50 border border-surface-200 rounded-lg text-xs font-mono text-surface-400 hover:bg-surface-100 transition-colors">
+                    <span>⌘K</span><span class="text-surface-300">/</span>
+                </button>
+            </div>
+            <button onclick="showToast('Új jegyzet létrehozva','info')" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700 transition-all shadow-sm shadow-brand-200 active:scale-[0.98]">
+                <i class="fas fa-plus text-xs"></i>Új jegyzet
+            </button>
+        </div>
+
+        <!-- Token Usage Progress (QA-10b / Throttling) -->
+        <div class="px-4 py-3 border-b border-surface-100 bg-gradient-to-r from-brand-50/60 to-transparent">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[11px] font-semibold text-surface-500 uppercase tracking-wider"><i class="fas fa-coins text-amber-400 mr-1"></i>Token-felhasználás</span>
+                <span id="token-display" class="text-[11px] font-mono text-surface-500">2.3M / 5M</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-100 rounded-full overflow-hidden">
+                <div id="token-progress" class="h-full bg-gradient-to-r from-brand-400 to-brand-600 rounded-full progress-bar-transition" style="width: 46%"></div>
+            </div>
+            <p id="token-status-text" class="text-[10px] text-surface-400 mt-1">~2.7M token maradt · Auto-save debounce: 800ms</p>
+        </div>
+
+        <!-- Notes List -->
+        <div class="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+            <div class="px-2 py-1 text-[10px] font-bold text-surface-400 uppercase tracking-widest mt-2 mb-1">Aktuális</div>
+            
+            <!-- Active Note -->
+            <button onclick="selectNote('q3-projekt')" class="sidebar-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group">
+                <i class="fas fa-file-lines text-brand-500 text-xs"></i>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-surface-700 truncate">Q3 projektállapot-jelentés</div>
+                    <div class="text-[11px] text-surface-400 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-brand-400"></span>v12 · ma 14:23
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-[10px] text-surface-300 group-hover:text-brand-400 transition-colors"></i>
+            </button>
+
+            <!-- Draft Note -->
+            <button onclick="selectNote('risk')" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-50 transition-all text-left group">
+                <i class="fas fa-file-lines text-surface-400 text-xs"></i>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-surface-700 truncate">Kockázati registry – Q3</div>
+                    <div class="text-[11px] text-surface-400 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 pulse-ring-sm"></span>v9 (DRAFT) · tegnap 16:30
+                    </div>
+                </div>
+            </button>
+
+             <!-- Other Note -->
+             <button onclick="selectNote('gdpr')" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-50 transition-all text-left group">
+                <i class="fas fa-file-lines text-surface-400 text-xs"></i>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-surface-700 truncate">GDPR compliance checklist</div>
+                    <div class="text-[11px] text-surface-400 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>v8 · tegnap 09:11
+                    </div>
+                </div>
+            </button>
+        </div>
+
+        <!-- User & Export -->
+        <div class="border-t border-surface-100 px-4 py-3 space-y-2">
+            <div class="flex items-center gap-2 text-xs text-surface-500">
+                <i class="fas fa-shield-halved text-green-500"></i>
+                <span class="font-medium">Compliance: Aktív</span>
+                <span class="ml-auto px-1.5 py-0.5 bg-surface-100 rounded font-mono text-[10px]">TLS 1.3 · AES-256</span>
+            </div>
+            <div class="flex gap-1.5">
+                <button onclick="toggleVersionModal()" class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium bg-surface-50 border border-surface-200 rounded-lg hover:bg-surface-100 transition-colors" title="Verziótörténet">
+                    <i class="fas fa-code-branch"></i><span>Történet</span>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN EDITOR AREA -->
+    <main class="flex-1 flex flex-col min-w-0 bg-white">
+        <header class="h-[56px] border-b border-surface-200 flex items-center justify-between px-6 shrink-0">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 text-surface-400 transition-colors" title="Oldalsáv be/ki"><i class="fas fa-bars"></i></button>
+                <div class="h-5 w-px bg-surface-200"></div>
+                <!-- View Toggles -->
+                <div class="flex items-center gap-1 p-1 bg-surface-100 rounded-lg">
+                    <button onclick="setView('edit')" id="btn-edit-view" class="view-btn px-3 py-1.5 text-xs font-semibold rounded-md bg-white shadow-sm text-surface-700 transition-all"><i class="fas fa-pen-to-square mr-1"></i>Szerkesztés</button>
+                    <button onclick="setView('split')" id="btn-split-view" class="view-btn px-3 py-1.5 text-xs font-semibold rounded-md text-surface-400 hover:text-surface-600 transition-all"><i class="fas fa-columns mr-1"></i>Split</button>
+                    <button onclick="setView('preview')" id="btn-preview-view" class="view-btn px-3 py-1.5 text-xs font-semibold rounded-md text-surface-400 hover:text-surface-600 transition-all"><i class="fas fa-eye mr-1"></i>Előnézet</button>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Lock Status (QA-05/STATE) -->
+                <span id="lock-status" class="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-lg text-[11px] font-medium text-green-700">
+                    <i class="fas fa-lock text-[10px]"></i>Verzió: v12 · Optimistic locking aktív
+                </span>
+                <!-- Auto Save Status -->
+                <span class="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-surface-50 border border-surface-100 rounded-lg text-[11px] font-medium text-surface-500">
+                    <i class="fas fa-cloud-arrow-down text-[10px]"></i>Auto-save · 800ms debounce
+                </span>
+            </div>
+        </header>
+
+        <div id="editor-area" class="flex-1 overflow-y-auto relative">
+            <!-- Editor Content -->
+            <div class="max-w-[720px] mx-auto px-8 py-8 md:py-12">
+                <input type="text" value="Q3 projektállapot-jelentés" class="w-full text-3xl font-bold text-surface-900 outline-none bg-transparent placeholder:text-surface-300 mb-2">
+                
+                <div class="flex items-center gap-4 mb-8 pb-6 border-b border-surface-100">
+                    <span class="text-xs text-surface-400"><i class="fas fa-calendar mr-1"></i>Létrehozva: 2024.07.01</span>
+                    <span class="text-xs text-surface-400"><i class="fas fa-clock mr-1"></i>Módosítva: ma 14:23</span>
+                    <span class="px-2 py-0.5 bg-brand-50 text-brand-600 text-[10px] font-bold rounded-full uppercase tracking-wider">Aktív</span>
+                </div>
+
+                <!-- Markdown Editor -->
+                <textarea id="markdown-editor" class="w-full min-h-[400px] outline-none resize-none font-mono text-sm leading-relaxed text-surface-700 bg-transparent placeholder:text-surface-300" spellcheck="false"># Q3 Projektállapot-jelentés
+
+## 📊 Áttekintés
+A negyedidőszak eleje **stabil tempót** mutatott, a keretrendszer 92%-os betartásával.
+
+### Főbb mérföldkövek
+- ✅ Belső auditor integrálása – *jún. 15.*
+- ⏳ Kockázati registry frissítése – *határidő: júl. 20.*
+- 🔲 Compliance tréning új tagoknak – *tervezett: aug. 5.*
+
+## ⚠️ Kockázatok (AI-asszisztens elemzés)
+> **Megjegyzés:** A lentábbi AI által generált kockázati értékelés a [Q3 risk dataset](rag://risk-db/q3-summary) alapján készült.
+
+| Azonosító | Leírás | Valószínűség | Hatás | Prioritás |
+|-----------|--------|-------------|-------|-----------|
+| R-042 | Külső konzultáns késedelmes delivery | Közepes | Magas | 🔴 P1 |
+| R-038 | GDPR audit előzetes jelzés hiánya | Alacsony | Közepes | 🟡 P2 |
+
+## 👥 Csapat állapot
+A cross-functional team **7 tagból** áll, a sprint velocity átlagosan **47 story point/hét**.
+
+---
+*AI-asszisztens: Kontextus-bázisú RAG keresés aktív · 5 jegyzet felhasználva*
+</textarea>
+                
+                <!-- Preview Area (Hidden by default) -->
+                <div id="preview-area" class="hidden max-w-[720px] mx-auto px-8 py-8 md:py-12 prose prose-slate max-w-none">
+                    <h1 style="font-size: 2rem; font-weight: 700;">Q3 Projektállapot-jelentés</h1>
+                    <hr style="margin-top:1rem;border:none;border-top:1px solid #e4e4e7;">
+                    <p style="font-size:12px;color:#71717a;"><i class="fas fa-robot mr-1"></i>AI-asszisztens: Kontextus-bázisú RAG keresés aktív · 5 jegyzet felhasználva</p>
+                </div>
+            </div>
+        </div>
+
+        <footer class="h-[32px] border-t border-surface-100 flex items-center justify-between px-4 bg-surface-50 shrink-0">
+            <div class="flex items-center gap-4 text-[11px] text-surface-400">
+                <span><i class="fas fa-keyboard mr-1"></i>Ctrl+Enter: Küldés (AI)</span>
+                <span id="save-status" class="text-green-600 font-medium"><i class="fas fa-check-circle mr-1"></i>v12 mentve</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="word-count" class="text-[11px] text-surface-400">Szavak: 847 · Karakterek: 5,231</span>
+                <span id="session-timer" class="text-[11px] text-surface-400"><i class="fas fa-globe mr-1"></i>Online (Session: 00:00)</span>
+            </div>
+        </footer>
+    </main>
+
+    <!-- AI CHAT PANEL (400px) -->
+    <aside id="ai-panel" class="w-[400px] bg-surface-50 border-l border-surface-200 flex flex-col shrink-0">
+        <div class="h-[56px] border-b border-surface-200 flex items-center justify-between px-5 shrink-0 bg-white">
+            <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm">
+                    <i class="fas fa-wand-magic-sparkles text-white text-xs"></i>
+                </div>
+                <span class="font-semibold text-sm text-surface-800">AI Asszisztens</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <!-- Circuit Breaker Status (QA-CB) -->
+                <button id="cb-toggle" onclick="toggleCircuitBreaker()" title="Circuit Breaker állapot váltás (T0 Validáció)" 
+                    class="px-2 py-1 bg-green-50 border border-green-200 rounded-lg text-[10px] font-bold text-green-600 flex items-center gap-1 hover:bg-green-100 transition-colors">
+                    <i id="cb-icon" class="fas fa-circle text-[6px]"></i>
+                    <span id="cb-state">CLOSED</span>
+                </button>
+
+                <!-- RAG Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer" title="RAG kontextus be/ki">
+                    <span class="text-[10px] font-semibold text-surface-500 uppercase tracking-wider">RAG</span>
+                    <div class="relative">
+                        <input type="checkbox" id="rag-toggle" checked class="sr-only peer" onchange="toggleRAG()">
+                        <div class="w-9 h-[18px] bg-surface-200 rounded-full peer-checked:bg-brand-500 transition-colors"></div>
+                        <div class="absolute top-1 left-1 w-3.5 h-3.5 bg-white rounded-full shadow-sm peer-checked:translate-x-[20px] transition-transform"></div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- RAG Sources Bar -->
+        <div id="rag-sources-bar" class="px-5 py-2 bg-brand-50/40 border-b border-brand-100 flex items-center gap-2 text-[10px] font-medium text-brand-600">
+            <i class="fas fa-database"></i>
+            <span>RAG források: 5 jegyzet · Chunk limit: aktív</span>
+        </div>
+
+        <!-- Chat Messages -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            
+            <!-- System Greeting -->
+            <div class="text-center mb-2"><span class="inline-block px-3 py-1 bg-surface-100 rounded-full text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Ma 14:20</span></div>
+
+            <!-- AI Message (High Confidence) -->
+            <div class="flex gap-3 animate-fade-in">
+                <div class="w-7 h-7 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fas fa-wand-magic-sparkles text-white text-[10px]"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs font-semibold text-surface-600 mb-1">AI Asszisztens</div>
+                    <div class="bg-white border border-surface-200 rounded-2xl rounded-tl-md px-4 py-3 text-sm text-surface-700 leading-relaxed shadow-sm">Az aktuális jegyzet alapján az alábbi összefoglalót készítettem a Q3 kockázati registry-ről:</div>
+                    <div class="bg-white border border-surface-200 rounded-xl px-4 py-3 text-sm text-surface-600 leading-relaxed shadow-sm mt-1">2 aktív kockázat azonosítva. R-042 (konzultáns) P1 prioritású, a delivery késése miatt.</div>
+                    
+                    <div class="flex items-center gap-2 mt-2">
+                        <!-- Confidence Badge -->
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-lg text-[10px] font-bold text-green-600">
+                            <i class="fas fa-circle-check text-[8px]"></i>Confidence: 0.92
+                        </span>
+                        <!-- Insert Button -->
+                        <button onclick="insertAIResponse()" class="flex items-center gap-1 px-2.5 py-0.5 bg-brand-600 text-white rounded-lg text-[10px] font-semibold hover:bg-brand-700 transition-colors shadow-sm">
+                            <i class="fas fa-check"></i>Beillesztés
+                        </button>
+                    </div>
+
+                    <!-- Sources -->
+                    <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[9px] text-surface-400 uppercase tracking-wider font-semibold"><i class="fas fa-link mr-0.5"></i>Források:</span>
+                        <span class="px-2 py-0.5 bg-purple-50 border border-purple-100 rounded-md text-[9px] font-mono text-purple-600">rag://risk-db/q3</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Message -->
+            <div class="flex gap-3 justify-end animate-fade-in">
+                <div class="flex-1 min-w-0 max-w-[85%]">
+                    <div class="bg-brand-600 text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed shadow-sm">Kérlek, generálj egy kockázati elemzést a RAG adatbázis alapján.</div>
+                </div>
+                <img src="https://ui-avatars.com/api/?name=AK&background=0d9488&color=fff&size=28" class="w-7 h-7 rounded-full shrink-0 mt-1" alt="">
+            </div>
+
+            <!-- AI Message (Low Confidence - DRAFT) -->
+            <div class="flex gap-3 animate-fade-in">
+                <div class="w-7 h-7 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fas fa-wand-magic-sparkles text-white text-[10px]"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs font-semibold text-surface-600 mb-1">AI Asszisztens</div>
+                    
+                    <!-- Low Confidence UI Block -->
+                    <div class="ai-message confidence-low bg-white border-l-[3px] border-l-amber-400 border-y border-r border-surface-200 rounded-xl px-4 py-3 text-sm text-surface-700 leading-relaxed">
+                        ⚠️ Az alábbi tartalom <strong>DRAFT</strong> státuszú. A bizalmi pontszám (0.58) az automatikus beillesztés alsó határa alatt van – <strong>kérlek, ellenőrizd manuálisan!</strong>
+                    </div>
+
+                    <div class="flex items-center gap-2 mt-3">
+                        <!-- Warning Badge -->
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-bold text-amber-600 pulse-ring-sm" style="animation:none;">
+                            <i class="fas fa-triangle-exclamation text-[8px]"></i>Confidence: 0.58 · DRAFT
+                        </span>
+                    </div>
+
+                    <!-- Action Buttons for Low Confidence -->
+                    <div class="flex items-center gap-2 mt-2">
+                        <button onclick="insertAIResponse()" class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-[11px] font-semibold hover:bg-brand-700 transition-colors shadow-sm">
+                            <i class="fas fa-check"></i>Beillesztés megerősítése
+                        </button>
+                        <button onclick="showToast('AI válasz elvetve','warning')" class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-100 text-surface-600 rounded-lg text-[11px] font-medium hover:bg-surface-200 transition-colors">
+                            <i class="fas fa-xmark"></i>Elvetés
+                        </button>
+                    </div>
+
+                     <!-- Sources -->
+                     <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[9px] text-surface-400 uppercase tracking-wider font-semibold"><i class="fas fa-link mr-0.5"></i>Források:</span>
+                        <span class="px-2 py-0.5 bg-purple-50 border border-purple-100 rounded-md text-[9px] font-mono text-purple-600">rag://contracts/external</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spacer -->
+            <div class="h-4"></div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div id="chat-input-area" class="border-t border-surface-200 bg-white p-4 shrink-0">
+            <div class="relative">
+                <textarea id="ai-chat-input" rows="2" placeholder="Kérdezz az AI asszisztenstől… (Ctrl+Enter küldés)" 
+                    class="w-full px-4 py-3 pr-12 text-sm bg-surface-50 border border-surface-200 rounded-xl outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all resize-none placeholder:text-surface-300"></textarea>
+                <button id="send-btn" onclick="sendAIMessage()" class="absolute right-2 bottom-2 w-8 h-8 bg-brand-600 text-white rounded-lg flex items-center justify-center hover:bg-brand-700 transition-colors shadow-sm active:scale-95">
+                    <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1">
+                <button onclick="showToast('Összegezés parancs aktiválva','info')" class="px-2.5 py-1 bg-surface-50 border border-surface-100 rounded-lg text-[10px] font-medium text-surface-500 hover:bg-brand-50 hover:border-brand-200 hover:text-brand-600 transition-colors shrink-0">
+                    <i class="fas fa-compress mr-1"></i>Összegez
+                </button>
+                <button onclick="showToast('Kiegészítés parancs aktiválva','info')" class="px-2.5 py-1 bg-surface-50 border border-surface-100 rounded-lg text-[10px] font-medium text-surface-500 hover:bg-brand-50 hover:border-brand-200 hover:text-brand-600 transition-colors shrink-0">
+                    <i class="fas fa-plus mr-1"></i>Kiegészít
+                </button>
+                <button onclick="showToast('AI ellenőrzés aktiválva','info')" class="px-2.5 py-1 bg-surface-50 border border-surface-100 rounded-lg text-[10px] font-medium text-surface-500 hover:bg-brand-50 hover:border-brand-200 hover:text-brand-600 transition-colors shrink-0">
+                    <i class="fas fa-magnifying-glass mr-1"></i>Ellenőriz
+                </button>
+            </div>
+
+            <!-- Audit Trail Footer -->
+            <div class="flex items-center justify-between mt-3 pt-2 border-t border-surface-50">
+                <span id="audit-counter" class="text-[10px] text-surface-400 flex items-center gap-1">
+                    <i class="fas fa-file-lines"></i>Audit trail: 847 esemény
+                </span>
+                <button onclick="showToast('Audit query endpoint megnyitva','info')" class="text-[10px] text-brand-500 hover:text-brand-600 font-medium flex items-center gap-1">
+                    <i class="fas fa-arrow-up-right-from-square"></i>/api/audit/query
+                </button>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<script>
+// ── State Management (Immutable / Dispatcher Pattern) ──
+const state = {
+    notes: [
+        { id:'q3-projekt', title:'Q3 projektállapot-jelentés', version:12, status:'active' },
+        { id:'risk', title:'Kockázati registry – Q3', version:9, status:'draft' }
+    ],
+    activeNoteId: 'q3-projekt',
+    viewMode: 'edit', ragEnabled: true,
+    circuitBreaker: { state: 'CLOSED', failures: 0 },
+    tokenUsage: { current: 2.3, max: 5, unit: 'M' },
+    auditCount: 847, sessionStart: Date.now(), warningShown: false, disabled: false
+};
+
+// ── Debounce (800ms) – No Promise chains (QA-10 fix concept) ──
+let saveTimer = null;
+function scheduleSave() {
+    clearTimeout(saveTimer);
+    state._saveDebounceId = setTimeout(() => {
+        const note = state.notes.find(n => n.id === state.activeNoteId);
+        if (!note) return;
+        
+        // Simulate backend PUT response with version update (QA-05 fix concept)
+        simulateBackendPut(note).then(newVersion => {
+            // Explicit state update via dispatcher pattern
+            const updatedNotes = state.notes.map(n => n.id === note.id ? { ...n, version: newVersion } : n);
+            Object.assign(state, { notes: updatedNotes });
+            updateLockStatus();
+            showToast(`Mentve · Verzió v${newVersion}`, 'success');
+        });
+    }, 800);
+}
+
+function simulateBackendPut(note) { return new Promise(resolve => setTimeout(() => resolve(note.version + 1), 300)); }
+
+// ── UI Updates & Interactions ──
+function updateLockStatus() { const note = state.notes.find(n => n.id === state.activeNoteId); if (note) document.getElementById('lock-status').innerHTML = `<i class="fas fa-lock text-[10px]"></i>Verzió: v${note.version} · Optimistic locking aktív`; }
+function setView(mode) { 
+    state.viewMode = mode; 
+    const editorArea = document.getElementById('editor-area'); 
+    const previewArea = document.getElementById('preview-area'); 
+    const textarea = document.getElementById('markdown-editor'); 
+    document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('bg-white','shadow-sm','text-surface-700'), btn.classList.add('text-surface-400')); 
+    
+    if (mode === 'edit') { 
+        textarea.classList.remove('hidden'); previewArea.classList.add('hidden'); 
+        document.getElementById('btn-edit-view').classList.add('bg-white','shadow-sm','text-surface-700'); 
+    } else if (mode === 'preview') { 
+        textarea.classList.add('hidden'); previewArea.classList.remove('hidden'); 
+        document.getElementById('btn-preview-view').classList.add('bg-white','shadow-sm','text-surface-700'); 
+    } else { 
+        textarea.classList.remove('hidden'); previewArea.classList.remove('hidden'); 
+        document.getElementById('btn-split-view').classList.add('bg-white','shadow-sm','text-surface-700'); 
+    } 
+}
+function toggleGlobalSearch() { const m = document.getElementById('global-search-modal'); if (m.classList.contains('hidden')) { m.classList.remove('hidden'); setTimeout(() => document.getElementById('global-search-input').focus(), 100); } else { m.classList.add('hidden'); } }
+document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); toggleGlobalSearch(); } if (e.key === 'Escape') { ['global-search-modal','version-modal'].forEach(id => document.getElementById(id).classList.add('hidden')); } });
+function toggleVersionModal() { document.getElementById('version-modal').classList.toggle('hidden'); }
+function selectNote(id) { state.activeNoteId = id; document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active')); event.currentTarget.closest('.sidebar-item')?.classList.add('active'); showToast(`Jegyzet váltva: ${event.currentTarget.querySelector('.font-medium')?.textContent}`, 'info'); }
+function toggleSidebar() { const s = document.getElementById('sidebar'); s.style.display = s.style.display === 'none' ? '' : 'none'; }
+
+// ── Toast System ──
+function showToast(message, type = 'info') { 
+    const c = document.getElementById('toast-container'); 
+    const colors = { success:'bg-green-50 border-green-200 text-green-800', warning:'bg-amber-50 border-amber-200 text-amber-800', error:'bg-red-50 border-red-200 text-red-800', info:'bg-surface-50 border-surface-200 text-surface-700' }; 
+    const icons = { success:'fa-circle-check', warning:'fa-triangle-exclamation', error:'fa-ban', info:'fa-circle-info' }; 
+    const t = document.createElement('div'); 
+    t.className = `flex items-center gap-3 px-4 py-3 border rounded-xl shadow-lg text-sm font-medium animate-fade-in max-w-xs pointer-events-auto ${colors[type]}`; 
+    t.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`; 
+    c.appendChild(t); 
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-8px)'; t.style.transition = 'all 0.2s ease-out'; setTimeout(() => t.remove(), 200); }, 3500); 
+}
+
+// ── AI Chat & Confidence Handling (QA-09/11) ──
+function sendAIMessage() { 
+    const input = document.getElementById('ai-chat-input'); 
+    const msg = input.value.trim(); 
+    if (!msg || state.circuitBreaker.state === 'OPEN') return; 
+    
+    syncAuditLog({ event: 'AI_MESSAGE_SENT', message: msg.substring(0, 50) }); 
+    const chatMessages = document.getElementById('chat-messages'); 
+    const userMsg = document.createElement('div'); 
+    userMsg.className = 'flex gap-3 justify-end animate-fade-in'; 
+    userMsg.innerHTML = `<div class="flex-1 min-w-0 max-w-[85%]"><div class="bg-brand-600 text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed shadow-sm">${escapeHtml(msg)}</div></div><img src="https://ui-avatars.com/api/?name=AK&background=0d9488&color=fff&size=28" class="w-7 h-7 rounded-full shrink-0 mt-1" alt="">`; 
+    chatMessages.appendChild(userMsg); 
+    input.value = ''; 
+    chatMessages.scrollTop = chatMessages.scrollHeight; 
+    
+    setTimeout(() => simulateAIResponse(msg), 800 + Math.random() * 1200); 
+}
+
+function simulateAIResponse(userMsg) { 
+    const chatMessages = document.getElementById('chat-messages'); 
+    if (state.circuitBreaker.state === 'OPEN') { showCircuitBreakerMessage(); return; } 
+    
+    const confidence = Math.random() > 0.5 ? 0.7 + Math.random() * 0.29 : 0.4 + Math.random() * 0.3; 
+    const isLowConfidence = confidence < 0.7; 
+    
+    syncAuditLog({ event: 'AI_RESPONSE', confidence: confidence.toFixed(2) }); 
+    let actionsHTML, badgeClass, badgeIcon; 
+    
+    if (isLowConfidence) { 
+        badgeClass = 'bg-amber-50 border border-amber-200 text-amber-600'; 
+        badgeIcon = 'fa-triangle-exclamation'; 
+        actionsHTML = `<div class="flex items-center gap-3 mt-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 ${badgeClass} rounded-lg text-[10px] font-bold"><i class="fas ${badgeIcon} text-[8px]"></i>Confidence: ${confidence.toFixed(2)} · DRAFT</span></div><div class="flex items-center gap-2 mt-2"><button onclick="insertAIResponse()" class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-[11px] font-semibold hover:bg-brand-700 transition-colors shadow-sm"><i class="fas fa-check"></i>Beillesztés megerősítése</button><button onclick="showToast('AI válasz elvetve','warning')" class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-100 text-surface-600 rounded-lg text-[11px] font-medium hover:bg-surface-200 transition-colors"><i class="fas fa-xmark"></i>Elvetés</button></div>`; 
+    } else { 
+        badgeClass = 'bg-green-50 border border-green-200 text-green-600'; 
+        badgeIcon = 'fa-circle-check'; 
+        actionsHTML = `<div class="flex items-center gap-2 mt-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 ${badgeClass} rounded-lg text-[10px] font-bold"><i class="fas ${badgeIcon} text-[8px]"></i>Confidence: ${confidence.toFixed(2)}</span><button onclick="insertAIResponse()" class="flex items-center gap-1 px-2.5 py-0.5 bg-brand-600 text-white rounded-lg text-[10px] font-semibold hover:bg-brand-700 transition-colors shadow-sm"><i class="fas fa-check"></i>Beillesztés</button></div>`; 
+    } 
+    
+    const aiMsg = document.createElement('div'); 
+    aiMsg.className = `flex gap-3 animate-fade-in ${isLowConfidence ? 'ai-message confidence-low' : ''}`; 
+    aiMsg.innerHTML = `<div class="w-7 h-7 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0 mt-0.5"><i class="fas fa-wand-magic-sparkles text-white text-[10px]"></i></div><div class="flex-1 min-w-0"><div class="text-xs font-semibold text-surface-600 mb-1">AI Asszisztens</div><div class="${isLowConfidence ? 'bg-white border-l-[3px] border-l-amber-400 border-y border-r border-surface-200' : 'bg-white border border-surface-200'} rounded-xl px-4 py-3 text-sm text-surface-700 leading-relaxed shadow-sm">${isLowConfidence ? `⚠️ Az alábbi tartalom <strong>DRAFT</strong> státuszú. A bizalmi pontszám (${confidence.toFixed(2)}) az automatikus beillesztés alsó határa alatt van – <strong>kérlek, ellenőrizd manuálisan!</strong>` : 'Készítettem egy elemzést a kért témakörből.'}</div>${actionsHTML}</div>`; 
+    chatMessages.appendChild(aiMsg); 
+    chatMessages.scrollTop = chatMessages.scrollHeight; 
+}
+
+function showCircuitBreakerMessage() { 
+    const chatMessages = document.getElementById('chat-messages'); 
+    const msg = document.createElement('div'); 
+    msg.className = 'flex gap-3 animate-fade-in opacity-70'; 
+    msg.innerHTML = `<div class="w-7 h-7 bg-gradient-to-br from-surface-400 to-surface-500 rounded-lg flex items-center justify-center shrink-0 mt-0.5"><i class="fas fa-wand-magic-sparkles text-white text-[10px]"></i></div><div class="flex-1 min-w-0"><div class="bg-surface-100 border border-dashed border-surface-300 rounded-xl px-4 py-2.5 text-xs text-surface-500 leading-relaxed flex items-center gap-2"><i class="fas fa-bolt text-red-400"></i>AI chat panel letiltva (Circuit Breaker: OPEN). Helyi draft mentve.</div></div>`; 
+    chatMessages.appendChild(msg); 
+}
+function insertAIResponse() { showToast('Tartalom beillesztve a jegyzetbe', 'success'); syncAuditLog({ event: 'AI_INSERT_CONFIRMED' }); }
+
+// ── T0 Validation Features (QA-CB, QA-10b, QA-SESS, QA-11) ──
+function toggleCircuitBreaker() { 
+    const states = ['CLOSED', 'HALF_OPEN', 'OPEN']; 
+    let idx = states.indexOf(state.circuitBreaker.state); 
+    idx = (idx + 1) % states.length; 
+    state.circuitBreaker.state = states[idx]; 
+    
+    const cbBadge = document.getElementById('cb-toggle'); 
+    const cbIcon = document.getElementById('cb-icon'); 
+    const cbStateTxt = document.getElementById('cb-state'); 
+    
+    if (state.circuitBreaker.state === 'CLOSED') { 
+        cbBadge.className = 'px-2 py-1 bg-green-50 border border-green-200 rounded-lg text-[10px] font-bold text-green-600 flex items-center gap-1 hover:bg-green-100 transition-colors'; 
+        cbIcon.className = 'fas fa-circle text-[6px]'; 
+    } else if (state.circuitBreaker.state === 'HALF_OPEN') { 
+        cbBadge.className = 'px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-bold text-amber-600 flex items-center gap-1 hover:bg-amber-100 transition-colors'; 
+        cbIcon.className = 'fas fa-triangle-exclamation text-[8px]'; 
+    } else { 
+        cbBadge.className = 'px-2 py-1 bg-red-50 border border-red-200 rounded-lg text-[10px] font-bold text-red-600 flex items-center gap-1 hover:bg-red-100 transition-colors'; 
+        cbIcon.className = 'fas fa-ban text-[8px]'; 
+        document.getElementById('ai-panel').classList.add('circuit-open'); 
+    } 
+    
+    cbStateTxt.innerText = state.circuitBreaker.state; 
+    showToast(`Circuit Breaker: ${state.circuitBreaker.state}`, state.circuitBreaker.state === 'OPEN' ? 'warning' : 'info'); 
+}
+
+function toggleRAG() { const toggled = document.getElementById('rag-toggle').checked; state.ragEnabled = toggled; document.getElementById('rag-sources-bar').style.display = toggled ? 'flex' : 'none'; }
+
+function syncAuditLog(eventData) { 
+    state.auditCount++; 
+    document.getElementById('audit-counter').innerHTML = `<i class="fas fa-file-lines"></i>Audit trail: ${state.auditCount} esemény`; 
+    
+    // Simulate fetch
+    console.log(`[AUDIT SYNC] POST /api/audit`, eventData);
+    
+    const textarea = document.getElementById('markdown-editor'); 
+    if (textarea) { 
+        const text = textarea.value; 
+        const words = text.trim().split(/\s+/).filter(w => w.length > 0).length; 
+        const chars = text.length.toLocaleString(); 
+        document.getElementById('word-count').textContent = `Szavak: ${words} · Karakterek: ${chars}`; 
+    } 
+}
+
+function showSessionWarning() { if (!state.sessionWarningShown) { document.getElementById('session-warning').classList.remove('hidden'); state.sessionWarningShown = true; showToast('Munkamenet figyelmeztetés aktiválva', 'warning'); } }
+function extendSession() { document.getElementById('session-warning').classList.add('hidden'); state.sessionStart = Date.now(); state.sessionWarningShown = false; showToast('Munkamenet meghosszabbítva', 'success'); }
+
+// ── Token Throttling Simulation (QA-10b) ──
+function simulateTokenUsage() { 
+    const btn = document.getElementById('send-btn'); 
+    if (state.tokenUsage.current >= state.tokenUsage.max) { 
+        showToast('Token limit elérve! AI chat letiltva.', 'error'); 
+        document.getElementById('chat-input-area').classList.add('circuit-open'); 
+        return; 
+    } 
+    
+    state.tokenUsage.current += 0.5; 
+    const pct = Math.min((state.tokenUsage.current / state.tokenUsage.max) * 100, 100); 
+    document.getElementById('token-progress').style.width = `${pct}%`; 
+    document.getElementById('token-display').innerText = `${state.tokenUsage.current.toFixed(1)}M / ${state.tokenUsage.max}M`; 
+    
+    const statusText = document.getElementById('token-status-text'); 
+    if (state.tokenUsage.current >= state.tokenUsage.max * 0.9) { 
+        statusText.innerText = '⚠️ Limit közeledik! Auto-save felfüggesztve.'; 
+        statusText.className = 'text-[10px] text-danger-600 font-bold mt-1'; 
+        document.getElementById('token-progress').classList.add('bg-red-500'); 
+    } else { 
+        statusText.innerText = `~${(state.tokenUsage.max - state.tokenUsage.current).toFixed(1)}M token maradt · Auto-save debounce: 800ms`; 
+    } 
+}
+
+// ── Session Watchdog Simulation (QA-SESS) ──
+setInterval(() => { 
+    const elapsed = Date.now() - state.sessionStart; 
+    const mins = Math.floor(elapsed / 60000); 
+    const secs = Math.floor((elapsed % 60000) / 1000); 
+    document.getElementById('session-timer').innerHTML = `<i class="fas fa-globe mr-1"></i>Online (Session: ${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')})`; 
+    
+    if (elapsed >= 13 * 60 * 1000 + 40 * 1000 && !state.sessionWarningShown) showSessionWarning(); 
+    if (elapsed >= 15 * 60 * 1000 + 2 * 1000) { showToast('Munkamenet lejárt. Kijelentkezés.', 'error'); location.reload(); } 
+}, 1000);
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => { 
+    document.getElementById('markdown-editor')?.addEventListener('input', scheduleSave); 
+    setTimeout(() => showToast('Üdvözöljük! T0 validációs ciklus aktív', 'info'), 500); 
+});
+function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+</script>
+
+</body>
+</html>
