@@ -1,69 +1,168 @@
 # agents.py
+"""Tiszta ágens-/LLM-logika.
+
+Ez a modul szándékosan NEM importál Streamlitet: csak LangChain láncokat épít,
+így önállóan tesztelhető és újrafelhasználható.
+
+FONTOS TERVEZÉSI DÖNTÉS
+-----------------------
+A perszóna-profilokat és a szabályokat NEM f-stringgel fűzzük a sablonba,
+hanem `PromptTemplate.partial_variables`-ként adjuk át. Így a modell által
+generált profilokban (vagy a felhasználó által beírt szabályokban) előforduló
+`{` és `}` karakterek nem törik el a prompt formázását
+(`KeyError: '...'` / `Single '}' encountered`).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List
+
 import requests
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
-from config import API_BASE_URL, API_KEY
+from langchain_openai import ChatOpenAI
 
-def get_lm_studio_models():
+import config
+import scaffold
+
+logger = logging.getLogger(__name__)
+
+# Hány korábbi üzenetet adunk át kontextusként.
+HISTORY_ABLAK = 6
+
+
+def get_lm_studio_models() -> List[str]:
+    """Lekérdezi az LM Studio-ban betöltött modellek listáját.
+
+    Hálózati hiba esetén üres listával tér vissza (a hívó dönt a fallbackről).
+    """
     try:
-        response = requests.get(f"{API_BASE_URL}/models")
-        if response.status_code == 200:
-            return [model['id'] for model in response.json()['data']]
+        response = requests.get(f"{config.API_BASE_URL}/models", timeout=5)
+        response.raise_for_status()
+        return [m["id"] for m in response.json().get("data", []) if "id" in m]
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        logger.warning("Nem sikerült lekérni a modelleket: %s", exc)
         return []
-    except Exception:
-        return []
 
-def format_recent_history(messages):
-    return "".join([f"{msg['szerep_nev']}: {msg['szoveg']}\n" for msg in messages[-6:]])
 
-def generate_base_profile(modell_nev, role_description):
-    # Időtúllépés (timeout) 600-ra emelve a kifagyások ellen!
-    llm = ChatOpenAI(base_url=API_BASE_URL, api_key=API_KEY, model=modell_nev, timeout=600)
-    prompt = PromptTemplate(input_variables=["role"], template="Készíts 3 mondatos leírást a karakterről: '{role}'. Csak a leírást írd.")
-    # KIVETTÜK A PARSERT, hogy a tokeneket mérni tudjuk:
-    return prompt | llm 
+def _create_llm_client(model_name: str, temperature: float = 0.7) -> ChatOpenAI:
+    return ChatOpenAI(
+        base_url=config.API_BASE_URL,
+        api_key=config.API_KEY,
+        model=model_name,
+        temperature=temperature,
+        timeout=config.LLM_TIMEOUT_SECONDS,
+    )
 
-def refine_profile(modell_nev, current_profile, role_name, round_num):
-    llm = ChatOpenAI(base_url=API_BASE_URL, api_key=API_KEY, model=modell_nev, temperature=0.8, timeout=600)
+
+def format_recent_history(messages: List[Dict[str, str]]) -> str:
+    """Az utolsó néhány üzenet szöveges összefűzése a prompt kontextusához."""
+    if not messages:
+        return "(Még nincs előzmény.)"
+    return "".join(
+        f"{msg.get('szerep_nev', '?')}: {msg.get('szoveg', '')}\n"
+        for msg in messages[-HISTORY_ABLAK:]
+    )
+
+
+def generate_base_profile(model_name: str, role_description: str) -> Any:
+    """Alapprofil-generáló lánc. A szerepleírás partial value-ként megy be."""
+    llm = _create_llm_client(model_name, temperature=0.7)
     prompt = PromptTemplate(
-        input_variables=["role_name", "current_profile", "round_num"],
-        template="""Te egy szociológus vagy. Finomítsd az alábbi profilt a {round_num}. iterációban. Szerep: {role_name}. Jelenlegi: {current_profile}. Adj hozzá kognitív torzításokat és rejtett motivációkat. Csak a profilt írd le!"""
+        input_variables=[],
+        partial_variables={"role": role_description or "(nincs megadva)"},
+        template="Készíts 3 mondatos leírást a karakterről: '{role}'. Csak a leírást írd.",
     )
     return prompt | llm
 
-def update_project_memory(modell_nev, uj_uzenetek, jelenlegi_memoria):
-    llm = ChatOpenAI(base_url=API_BASE_URL, api_key=API_KEY, model=modell_nev, temperature=0.1, timeout=600)
+
+def refine_profile(model_name: str, current_profile: str, role_name: str, round_num: int) -> Any:
+    """Profilfinomító lánc.
+
+    A `current_profile` LLM által generált szöveg, ezért partial value-ként
+    kerül be – így a benne lévő kapcsos zárójelek nem okoznak formázási hibát.
+    """
+    llm = _create_llm_client(model_name, temperature=0.8)
     prompt = PromptTemplate(
-        input_variables=["jelenlegi_memoria", "uj_uzenetek"],
-        template="""Te egy precíz szoftverfejlesztési adminisztrátor vagy. 
-        Frissítsd a projekt dokumentációját az új események alapján. Csak a tényeket, meghozott technikai döntéseket, teszteredményeket és a leszállított kódot őrizd meg! A vitákat és érzelmeket hagyd ki.
-        
-        JELENLEGI DOKUMENTÁCIÓ:
-        {jelenlegi_memoria}
-        
-        ÚJ ESEMÉNYEK:
-        {uj_uzenetek}
-        
-        Írd meg a frissített, letisztult dokumentációt:"""
+        input_variables=[],
+        partial_variables={
+            "role_name": role_name,
+            "current_profile": current_profile or "(üres)",
+            "round_num": str(round_num),
+        },
+        template=(
+            "Te egy szociológus vagy. Finomítsd az alábbi profilt a {round_num}. "
+            "iterációban. Szerep: {role_name}. Jelenlegi: {current_profile}. "
+            "Adj hozzá kognitív torzításokat és rejtett motivációkat. "
+            "Csak a profilt írd le!"
+        ),
     )
     return prompt | llm
 
-def get_agent_chain(modell_nev, szerep, persona_profile):
-    llm = ChatOpenAI(base_url=API_BASE_URL, api_key=API_KEY, model=modell_nev, temperature=0.7, timeout=600)
-    base_template = f"Te az alábbi mélypszichológiai profillal rendelkezel. Éld bele magad a szerepbe:\n---\n{persona_profile}\n---\n"
-    
-    if szerep == "PO":
-        task_template = """Feladatod: Product Owner (PO).\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: Az üzleti értékre fókuszálj. Ne fogadj el fékmunkát.\n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nLegutóbbi üzenet: {kerdes}\nA te válaszod:"""
-    elif szerep == "BA":
-        task_template = """Feladatod: IT Business Analyst (BA).\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: Elemezd a PO kérését, specifikálj és kérdezz rá a kivételekre!\n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nLegutóbbi üzenet: {kerdes}\nA te válaszod:"""
-    elif szerep == "UX":
-        task_template = """Feladatod: UX/UI Designer.\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: Tervezd meg a BA specifikációja alapján a felületet. \n Készíts pixel-perfect mockupokat és figyelj az ergonómiára! \nKészíts egy vizuális drótvázat (Wireframe) egyetlen, futtatható HTML kód formájában, amely Tailwind CSS-t használ (CDN-en keresztül). \nA dizájn legyen modern, letisztult és mutassa be a kért funkciókat (gombok, beviteli mezők, elrendezés).\nNAGYON FONTOS: A HTML kódot szigorúan ```html és ``` tagek közé zárd, hogy a rendszer ki tudja nyerni! A kód köré írhatsz magyarázatot, de a kód csak ebben a blokkban legyen. \n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nLegutóbbi üzenet: {kerdes} \nA te válaszod:"""
-    elif szerep == "IT":
-        task_template = """Feladatod: Informatikus.\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: Gépeld be a TÉNYLEGES FORRÁSKÓDOT! Javítsd a QA hibáit!\n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nLegutóbbi üzenet: {kerdes}\nA te válaszod:"""
-    elif szerep == "QA":
-        task_template = """Feladatod: Manual QA.\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: Vizsgáld meg a kódot! HA HIBÁT TALÁLSZ, dobd vissza! Soha ne engedj át teszteletlen kódot.\n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nLegutóbbi üzenet: {kerdes}\nA te válaszod:"""
-    else: # SM
-        task_template = """Feladatod: Scrum Master.\nEredeti ügyféligény: '{eredeti_igeny}'\nSZABÁLY: CSAK akkor írd be a [LEZÁRVA] szót, ha a kód kész ÉS a QA rábólintott!\n[DOKUMENTÁCIÓ]\n{projekt_memoria}\n[ELŐZMÉNYEK]\n{recent_history}\nA te moderálásod:"""
 
-    prompt = PromptTemplate(input_variables=["projekt_memoria", "recent_history", "kerdes", "eredeti_igeny"], template=base_template + task_template)
+def update_project_memory(model_name: str, uj_uzenetek: str, jelenlegi_memoria: str) -> Any:
+    """Az adminisztrátor lánc, ami a projekt dokumentációját konszolidálja.
+
+    A két szöveg partial value-ként megy be (kódrészleteket is tartalmazhatnak).
+    """
+    llm = _create_llm_client(model_name, temperature=0.1)
+    prompt = PromptTemplate(
+        input_variables=[],
+        partial_variables={
+            "jelenlegi_memoria": jelenlegi_memoria or config.URES_MEMORIA,
+            "uj_uzenetek": uj_uzenetek or "(nincs új esemény)",
+        },
+        template=(
+            "Te egy precíz szoftverfejlesztési adminisztrátor vagy.\n"
+            "Frissítsd a projekt dokumentációját az új események alapján. Csak a "
+            "tényeket, technikai döntéseket, teszteredményeket és a kódot őrizd "
+            "meg! A vitákat hagyd ki.\n\n"
+            "JELENLEGI DOKUMENTÁCIÓ:\n{jelenlegi_memoria}\n\n"
+            "ÚJ ESEMÉNYEK:\n{uj_uzenetek}\n\n"
+            "Írd meg a frissített dokumentációt:"
+        ),
+    )
+    return prompt | llm
+
+
+AGENS_SABLON = """Te az alábbi mélypszichológiai profillal rendelkezel. Éld bele magad a szerepbe:
+---
+{persona_profile}
+---
+Feladatod: {role_name}.
+Eredeti ügyféligény: '{eredeti_igeny}'
+SZABÁLY: {szabaly}
+[A PROJEKT VÁZA — ZÁROLT]
+{vaz_leiras}
+[A PROJEKT JELENLEGI FÁJLJAI]
+{fajlfa}
+FONTOS: ezek a fájlok MÁR LÉTEZNEK. Ne generáld újra a változatlan fájlokat!
+Csak azt a fájlt írd ki kódblokkban, amit ténylegesen létrehozol vagy módosítasz,
+és mindig a MEGLÉVŐ útvonalat használd, ha egy fájlt frissítesz.
+Fájl törléséhez írj külön sorba: DELETE: <útvonal>
+Fájl áthelyezéséhez: MOVE: <régi útvonal> -> <új útvonal>
+[DOKUMENTÁCIÓ]
+{projekt_memoria}
+[ELŐZMÉNYEK]
+{recent_history}
+Legutóbbi üzenet: {kerdes}
+A te válaszod:"""
+
+
+def get_agent_chain(model_name: str, role_name: str, persona_profile: str, rule: str) -> Any:
+    """Egy sprint-ágens láncát építi fel.
+
+    A `persona_profile` és a `rule` partial value-ként megy be, így tetszőleges
+    karaktereket (pl. JSON/Groovy kódrészletet) tartalmazhatnak.
+    """
+    llm = _create_llm_client(model_name, temperature=0.7)
+    prompt = PromptTemplate(
+        input_variables=["projekt_memoria", "recent_history", "kerdes", "eredeti_igeny", "fajlfa"],
+        partial_variables={
+            "persona_profile": persona_profile or "(Nincs generált profil.)",
+            "role_name": role_name,
+            "szabaly": rule or "(Nincs külön szabály.)",
+            "vaz_leiras": scaffold.vaz_leiras(),
+        },
+        template=AGENS_SABLON,
+    )
     return prompt | llm

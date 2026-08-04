@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Környezet
+venv/
+.venv/
+.env
+.vscode/
+.idea/
+
+# Generált / futásidejű adatok
+szimulacio_memoria.json
+opentelemetry_traces.json
+opentelemetry_traces.1.json
+utolso_drotvaz.html
+.memoria_*.tmp
+
+# Generált dokumentum-kimenetek (a forrás a DOKUMENTACIO.md; ezek abból bármikor újraállnak)
+*.docx
+*.pdf
+
+# Node / build (a generált projekthez, ha lokálisan buildelnéd)
+node_modules/
+dist/
+target/
